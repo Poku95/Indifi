@@ -79,6 +79,9 @@ pub struct Position {
 }
 
 impl Position {
+    pub fn speed_max_xy(&self) -> f32 {
+        f32::max((self.last_x - self.x).abs(), self.last_y - self.y)
+    }
     pub fn new(x: f32, y: f32) -> Self {
         Position {
             x,

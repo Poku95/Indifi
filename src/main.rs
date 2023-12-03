@@ -13,7 +13,7 @@ use transform::*;
 use player::*;
 use chunk::*;
 
-const MOVE_SPEED: f32 = 10.0;
+const AREA_SIZE: usize = 16;
 
 #[derive(AppState)]
 struct State {
@@ -23,7 +23,7 @@ struct State {
     mouse_pos: Vec2,
     chunks: Vec<Chunk>,
     chunk_i: usize,
-    floor_textures: Vec<Texture>,
+    textures: Vec<Texture>,
     render_size_pow: u8,
     debug: bool,
 }
@@ -49,34 +49,16 @@ fn main() {
 
 fn setup(gfx: &mut Graphics) -> State {
     let font = gfx.create_font(include_bytes!("assets/Ubuntu-B.ttf")).unwrap();
-    let mut floor_textures = Vec::<Texture>::new();
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test0.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test1.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test2.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test3.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test4.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test5.png")).build().unwrap()
-    );
-    floor_textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/test6.png")).build().unwrap()
+    let mut textures = Vec::<Texture>::new();
+    textures.push(
+        gfx.create_texture().from_image(include_bytes!("assets/atlas_test.png")).build().unwrap()
     );
 
     let mut chunks = Vec::new();
-    for x in 0..16_i32 {
-        for y in 0..16_i32 {
+    for y in 0..AREA_SIZE {
+        for x in 0..AREA_SIZE {
             let mut chunk = Chunk::new(gfx, x, y);
-            chunk.render_texture(gfx, &floor_textures);
+            chunk.render_low_res(gfx, &textures);
             chunks.push(chunk);
         }
     }
@@ -87,7 +69,7 @@ fn setup(gfx: &mut Graphics) -> State {
         player: PlayerBuilder::new().color_random().build(),
         mouse_pos: Vec2::new(0.0, 0.0),
         chunks,
-        floor_textures,
+        textures,
         render_size_pow: 8,
         chunk_i: 0,
         debug: false,
@@ -104,7 +86,7 @@ fn update(app: &mut App, state: &mut State) {
     if app.keyboard.was_pressed(KeyCode::O) && state.render_size_pow >= 7 {
         state.render_size_pow -= 1;
     }
-    if app.keyboard.was_pressed(KeyCode::P) && state.render_size_pow <= 10 {
+    if app.keyboard.was_pressed(KeyCode::P) && state.render_size_pow <= 14 {
         state.render_size_pow += 1;
     }
     state.debug = app.keyboard.is_down(KeyCode::L);
@@ -115,7 +97,9 @@ fn update(app: &mut App, state: &mut State) {
         state.chunks.iter_mut().for_each(|c| {
             let (x, y) = Chunk::pos_to_coords(state.player.pos().vec());
             let (cx, cy) = c.coords();
-            let lod = (i32::max((x - cx).abs() - 1, (y - cy).abs()) - 1).clamp(0, 7);
+            let lod = (
+                i32::max(((x as i32) - (cx as i32)).abs() - 1, ((y as i32) - (cy as i32)).abs()) - 1
+            ).clamp(0, 7);
             c.set_lod(lod as u32);
         });
     }
@@ -129,27 +113,44 @@ fn angle_between_points(point1: &Vec2, point2: &Vec2) -> f32 {
     delta_y.atan2(delta_x) * 57.2957795
 }
 
-use notan::math::*;
-fn draw(gfx: &mut Graphics, state: &mut State) {
-    for i in 0..64 {
-        if state.chunks[state.chunk_i].needs_redraw() {
-            state.chunks[state.chunk_i].redraw(gfx, &state.floor_textures);
-            break;
-        }
-        state.chunk_i += 1;
-        if state.chunk_i >= state.chunks.len() {
-            state.chunk_i = 0;
+fn render_chunks(
+    gfx: &mut Graphics,
+    state: &mut State,
+    draw: &mut Draw,
+    (x1, y1): (usize, usize),
+    (x2, y2): (usize, usize)
+) {
+    'main: for y in y1..usize::min(y2, AREA_SIZE - 1) + 1 {
+        for x in x1..usize::min(x2, AREA_SIZE - 1) + 1 {
+            let index = x + y * AREA_SIZE;
+            if index < 0 || (index as usize) >= state.chunks.len() {
+                continue;
+            }
+            if state.chunks[index as usize].needs_redraw() {
+                state.chunks[index as usize].redraw(gfx, &state.textures);
+                break 'main;
+            }
         }
     }
+}
+
+use notan::math::*;
+fn draw(app: &mut App, gfx: &mut Graphics, state: &mut State) {
+    let time = app.date_now();
 
     let mut draw = gfx.create_draw();
     draw.clear(Color::BLACK);
-
     draw.set_projection(Some(world_projection(gfx.size(), state.render_size_pow).0));
-
     draw.transform().set(
         Mat3::from_translation(Vec2::new(-state.player.pos().x(), -state.player.pos().y()))
     );
+
+    let (x1, y1) = Chunk::pos_to_coords(draw.screen_to_world_position(0.0, 0.0));
+    let (x2, y2) = Chunk::pos_to_coords(
+        draw.screen_to_world_position(gfx.size().0 as f32, gfx.size().1 as f32)
+    );
+
+    render_chunks(gfx, state, &mut draw, (x1, y1), (x2, y2));
 
     state.player.set_desired_rotation(
         angle_between_points(
@@ -158,7 +159,12 @@ fn draw(gfx: &mut Graphics, state: &mut State) {
         )
     );
 
-    state.chunks.iter().for_each(|c| c.render(&mut draw, state.debug));
+    'main: for y in y1..usize::min(y2, AREA_SIZE - 1) + 1 {
+        for x in x1..usize::min(x2, AREA_SIZE - 1) + 1 {
+            let index = x + y * AREA_SIZE;
+            state.chunks[index as usize].render(&mut draw, state.debug);
+        }
+    }
 
     state.player.render(&mut draw);
 
@@ -166,14 +172,16 @@ fn draw(gfx: &mut Graphics, state: &mut State) {
 
     let mut draw_ui = gfx.create_draw();
 
+    let draw_fps = format!("draw time: {:.2}ms", app.date_now() - time);
     draw_ui
         .text(
             &state.font,
             &format!(
-                "x: {:.2}\ny: {:.2}\n{}\nResolution: {:?}\nScale: {}",
+                "x: {:.2}\ny: {:.2}\n{}\n{}\nResolution: {:?}\nScale: {}",
                 state.player.pos().x(),
                 state.player.pos().y(),
                 &state.fps,
+                &draw_fps,
                 gfx.size(),
                 state.render_size_pow
             )

@@ -7,7 +7,7 @@ pub struct Player {
     desired_rotation: Rotation,
     color: Color,
     transform: TransformPR,
-    last_coords: (i32, i32),
+    last_coords: (usize, usize),
 }
 
 impl std::fmt::Debug for Player {
@@ -23,13 +23,16 @@ impl std::fmt::Debug for Player {
 }
 
 impl Player {
+    pub fn speed_max_xy(&self) -> f32 {
+        self.transform.position().speed_max_xy()
+    }
     pub fn pos(&self) -> &Position {
         self.transform.position()
     }
     fn pos_touple(&self) -> (f32, f32) {
         self.transform.pos_touple()
     }
-    pub fn last_coords(&self) -> (i32, i32) {
+    pub fn last_coords(&self) -> (usize, usize) {
         self.last_coords
     }
 
@@ -75,7 +78,7 @@ impl Player {
 
     fn check_chunk_change(&mut self) -> bool {
         let coords = Chunk::pos_to_coords(self.pos().vec());
-        if self.last_coords != coords {
+        if self.last_coords != coords && self.speed_max_xy() < Chunk::size() as f32 / 4.0 {
             self.last_coords = coords;
             return true
         }
@@ -100,7 +103,7 @@ impl Player {
         if app.keyboard.is_down(KeyCode::D) {
             pos.x += 0.75;
         }
-        pos
+        pos * 25.0
     }
 }
 
@@ -146,7 +149,7 @@ impl PlayerBuilder {
             desired_rotation: self.desired_rotation,
             color: self.color,
             transform: self.transform,
-            last_coords: (-1, -1),
+            last_coords: (1, 1),
         }
     }
 }
