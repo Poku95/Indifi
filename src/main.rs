@@ -101,15 +101,11 @@ fn update(app: &mut App, state: &mut State) {
         let full = !app.window().is_fullscreen();
         app.window().set_fullscreen(full);
     }
-    if app.keyboard.was_pressed(KeyCode::O) {
-        if state.render_size_pow >= 7 {
-            state.render_size_pow -= 1;
-        }
+    if app.keyboard.was_pressed(KeyCode::O) && state.render_size_pow >= 7 {
+        state.render_size_pow -= 1;
     }
-    if app.keyboard.was_pressed(KeyCode::P) {
-        if state.render_size_pow <= 10 {
-            state.render_size_pow += 1;
-        }
+    if app.keyboard.was_pressed(KeyCode::P) && state.render_size_pow <= 10 {
+        state.render_size_pow += 1;
     }
     state.debug = app.keyboard.is_down(KeyCode::L);
 
@@ -136,7 +132,8 @@ fn angle_between_points(point1: &Vec2, point2: &Vec2) -> f32 {
 use notan::math::*;
 fn draw(gfx: &mut Graphics, state: &mut State) {
     for i in 0..64 {
-        if state.chunks[state.chunk_i].update(gfx, &state.floor_textures) {
+        if state.chunks[state.chunk_i].needs_redraw() {
+            state.chunks[state.chunk_i].redraw(gfx, &state.floor_textures);
             break;
         }
         state.chunk_i += 1;

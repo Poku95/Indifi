@@ -17,6 +17,10 @@ impl TransformPR {
         }
     }
 
+    pub fn pos_touple(&self) -> (f32, f32) {
+        self.position.touple()
+    }
+
     pub fn position(&self) -> &Position {
         &self.position
     }
@@ -88,6 +92,10 @@ impl Position {
         self.x = new_x;
         self.last_y = self.y;
         self.y = new_y;
+    }
+
+    fn touple(&self) -> (f32, f32) {
+        (self.x, self.y)
     }
 
     pub fn vec(&self) -> Vec2 {

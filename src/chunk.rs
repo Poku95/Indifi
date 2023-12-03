@@ -9,6 +9,14 @@ pub struct Chunk {
     render_texture: RenderTexture,
     level_of_detail: u32,
     lod: u32,
+    in_bounds: bool,
+}
+
+fn index_to_pos(i: usize, level_of_detail: u32) -> (f32, f32) {
+    (
+        (((i % 16) * 32) / (level_of_detail as usize)) as f32,
+        (((i / 16) * 32) / (level_of_detail as usize)) as f32,
+    )
 }
 
 impl Chunk {
@@ -24,6 +32,7 @@ impl Chunk {
             render_texture,
             level_of_detail: 4,
             lod: 6,
+            in_bounds: false,
         }
     }
 
@@ -34,34 +43,37 @@ impl Chunk {
     //lod = level of detail
     pub fn render_texture(&mut self, gfx: &mut Graphics, floor_textures: &Vec<Texture>) {
         let lod = (2_u32).pow(self.lod);
+
         let size = gfx.size();
         gfx.set_size(TEXTURE_SIZE / lod, TEXTURE_SIZE / lod);
-        self.render_texture = gfx
-            .create_render_texture(TEXTURE_SIZE / lod, TEXTURE_SIZE / lod)
-            .build()
-            .unwrap();
-        let mut draw = gfx.create_draw();
-        self.floor_tiles
-            .iter()
-            .enumerate()
-            .for_each(|(i, b)| {
-                let x = (((i % 16) * 32) / (lod as usize)) as f32;
-                let y = (((i / 16) * 32) / (lod as usize)) as f32;
-                draw.image(&floor_textures[*b as usize])
-                    .position(x, y)
-                    .size(32.0 / (lod as f32), 32.0 / (lod as f32));
-            });
-        gfx.render_to(&mut self.render_texture, &draw);
+        {
+            self.render_texture = gfx
+                .create_render_texture(TEXTURE_SIZE / lod, TEXTURE_SIZE / lod)
+                .build()
+                .unwrap();
+
+            let mut draw = gfx.create_draw();
+            self.floor_tiles
+                .iter()
+                .enumerate()
+                .for_each(|(i, b)| {
+                    let (x, y) = index_to_pos(i, lod);
+                    draw.image(&floor_textures[*b as usize])
+                        .position(x, y)
+                        .size(32.0 / (lod as f32), 32.0 / (lod as f32));
+                });
+            gfx.render_to(&mut self.render_texture, &draw);
+        }
         gfx.set_size(size.0, size.1);
     }
 
-    pub fn update(&mut self, gfx: &mut Graphics, floor_textures: &Vec<Texture>) -> bool {
-        let p = self.level_of_detail != self.lod;
-        if p {
-            self.lod = self.level_of_detail;
-            self.render_texture(gfx, floor_textures);
-        }
-        p
+    pub fn needs_redraw(&self) -> bool {
+        self.lod != self.level_of_detail
+    }
+
+    pub fn redraw(&mut self, gfx: &mut Graphics, floor_textures: &Vec<Texture>) {
+        self.lod = self.level_of_detail;
+        self.render_texture(gfx, floor_textures);
     }
 
     fn coords_to_position(coords: (i32, i32)) -> Vec2 {
@@ -84,7 +96,22 @@ impl Chunk {
         if self.lod > 3 {
             return;
         }
+
         let (x, y) = Chunk::coords_to_position(self.coords).into();
+        let (x2, y2) = Chunk::coords_to_position((
+            self.coords.0,
+            self.coords.1,
+        )).into();
+
+        let screen_pos = draw.world_to_screen_position(x, y);
+        let screen_pos2 = draw.world_to_screen_position(x + Chunk::size() as f32, y + Chunk::size() as f32);
+        if
+            (screen_pos2.x < 0.0 && screen_pos2.y < 0.0) ||
+            screen_pos.x > draw.size().0 ||
+            screen_pos.y > draw.size().1
+        {
+            return;
+        }
 
         if debug {
             draw.rect(
