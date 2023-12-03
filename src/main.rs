@@ -51,7 +51,11 @@ fn setup(gfx: &mut Graphics) -> State {
     let font = gfx.create_font(include_bytes!("assets/Ubuntu-B.ttf")).unwrap();
     let mut textures = Vec::<Texture>::new();
     textures.push(
-        gfx.create_texture().from_image(include_bytes!("assets/atlas_test.png")).build().unwrap()
+        gfx
+            .create_texture()
+            .from_image(include_bytes!("assets/atlas_test_bigger.png"))
+            .build()
+            .unwrap()
     );
 
     let mut chunks = Vec::new();
@@ -100,7 +104,7 @@ fn update(app: &mut App, state: &mut State) {
             let lod = (
                 i32::max(((x as i32) - (cx as i32)).abs() - 1, ((y as i32) - (cy as i32)).abs()) - 1
             ).clamp(0, 7);
-            c.set_lod(lod as u32);
+            c.set_lod(lod as u8);
         });
     }
     state.fps = format!("{:.0} fps \nupdate time: {:.2}ms", app.timer.fps(), app.date_now() - time);
@@ -142,7 +146,9 @@ fn draw(app: &mut App, gfx: &mut Graphics, state: &mut State) {
     draw.clear(Color::BLACK);
     draw.set_projection(Some(world_projection(gfx.size(), state.render_size_pow).0));
     draw.transform().set(
-        Mat3::from_translation(Vec2::new(-state.player.pos().x(), -state.player.pos().y()))
+        Mat3::from_translation(
+            Vec2::new(-state.player.pos().x(), -state.player.pos().y())
+        )
     );
 
     let (x1, y1) = Chunk::pos_to_coords(draw.screen_to_world_position(0.0, 0.0));

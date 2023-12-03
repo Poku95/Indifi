@@ -103,7 +103,7 @@ impl Player {
         if app.keyboard.is_down(KeyCode::D) {
             pos.x += 0.75;
         }
-        pos * 25.0
+        pos
     }
 }
 

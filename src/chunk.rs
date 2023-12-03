@@ -1,35 +1,40 @@
 use crate::*;
 use notan::random::rand::{ self, random };
 
-const TEXTURE_SIZE: u32 = 512;
+const TEXTURE_SIZE: u32 = 1024;
+const BLOCK_SIZE: u32 = 64;
 
 pub struct Chunk {
     coords: (usize, usize),
-    floor_tiles: Vec<u32>,
+    floor_tiles: Vec<u8>,
+    wall_tiles: Vec<u8>,
     render_texture: RenderTexture,
     low_res: RenderTexture,
-    level_of_detail: u32,
-    lod: u32,
+    level_of_detail: u8,
+    lod: u8,
     in_bounds: bool,
 }
 
-fn index_to_pos(i: usize, level_of_detail: u32) -> (f32, f32) {
+fn index_to_pos(i: usize, level_of_detail: u8) -> (f32, f32) {
     (
-        (((i % 16) * 32) / (level_of_detail as usize)) as f32,
-        (((i / 16) * 32) / (level_of_detail as usize)) as f32,
+        (((i % 16) * BLOCK_SIZE as usize) / (level_of_detail as usize)) as f32,
+        (((i / 16) * BLOCK_SIZE as usize) / (level_of_detail as usize)) as f32,
     )
 }
 
 impl Chunk {
     pub fn new(gfx: &mut Graphics, x: usize, y: usize) -> Self {
         let mut floor_tiles = Vec::with_capacity(16 * 16);
+        let mut wall_tiles = Vec::with_capacity(16 * 16);
         for i in 0..16 * 16 {
-            floor_tiles.push((random::<f32>() * 6.0) as u32);
+            floor_tiles.push((random::<f32>() * 6.0) as u8);
+            wall_tiles.push(((random::<f32>() * 22.0) as u8));
         }
         let mut render_texture = gfx.create_render_texture(64, 64).build().unwrap();
         Chunk {
             coords: (x, y),
             floor_tiles,
+            wall_tiles,
             low_res: render_texture.clone(),
             render_texture,
             level_of_detail: 3,
@@ -38,7 +43,7 @@ impl Chunk {
         }
     }
 
-    pub fn set_lod(&mut self, lod: u32) {
+    pub fn set_lod(&mut self, lod: u8) {
         self.level_of_detail = lod.clamp(0, 4);
     }
 
@@ -51,7 +56,7 @@ impl Chunk {
     }
 
     fn render_texture(&mut self, gfx: &mut Graphics, textures: &Vec<Texture>) -> RenderTexture {
-        let lod = (2_u32).pow(self.lod);
+        let lod = (2_u32).pow(self.lod as u32);
         let size = gfx.size();
         gfx.set_size(TEXTURE_SIZE / lod, TEXTURE_SIZE / lod);
         let mut texture = gfx
@@ -60,16 +65,21 @@ impl Chunk {
             .unwrap();
 
         let mut draw = gfx.create_draw();
+        for i in 0..256 {
+            let (x, y) = index_to_pos(i, lod as u8);
+            let b = match self.wall_tiles[i] {
+                x if x > 16 => { x }
+                _ => { self.floor_tiles[i] }
+            };
+            draw.image(&textures[0])
+                .position(x, y)
+                .size(BLOCK_SIZE as f32 / (lod as f32), BLOCK_SIZE as f32 / (lod as f32))
+                .crop((((b % 16) as f32) * BLOCK_SIZE as f32, (b / 16) as f32 * BLOCK_SIZE as f32), (BLOCK_SIZE as f32, BLOCK_SIZE as f32));
+        }
         self.floor_tiles
             .iter()
             .enumerate()
-            .for_each(|(i, b)| {
-                let (x, y) = index_to_pos(i, lod);
-                draw.image(&textures[0])
-                    .position(x, y)
-                    .size(32.0 / (lod as f32), 32.0 / (lod as f32))
-                    .crop((((*b % 16) as f32) * 32.0, (*b / 16) as f32), (32.0, 32.0));
-            });
+            .for_each(|(i, b)| {});
         gfx.render_to(&mut texture, &draw);
         gfx.set_size(size.0, size.1);
         texture
